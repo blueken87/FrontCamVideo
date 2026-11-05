@@ -124,7 +124,7 @@ static BOOL IGFSupportedPixelFormat(OSType format) {
     self.preparing = YES;
     self.mirror = mirror;
     self.targetSize = CMVideoFormatDescriptionGetDimensions(format);
-    OSType formatType = CMVideoFormatDescriptionGetMediaSubType(format);
+    OSType formatType = CMFormatDescriptionGetMediaSubType(format);
     self.targetFormat = IGFSupportedPixelFormat(formatType) ? formatType : kCVPixelFormatType_32BGRA;
     IGFLog([NSString stringWithFormat:@"loading %@ size=%dx%d format=%c%c%c%c",
             path, self.targetSize.width, self.targetSize.height,
@@ -272,12 +272,6 @@ static CMSampleBufferRef IGFCreateSampleBuffer(CVPixelBufferRef pixelBuffer,
                                                                &timing, &result);
     CFRelease(format);
     if (status != noErr || !result) return NULL;
-
-    CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(original, false);
-    if (attachments && CFArrayGetCount(attachments) > 0) {
-        CFDictionaryRef dict = CFArrayGetValueAtIndex(attachments, 0);
-        if (dict) CMSampleBufferSetAttachments(result, dict);
-    }
     return result;
 }
 
@@ -290,7 +284,7 @@ static CMSampleBufferRef IGFCreateSampleBuffer(CVPixelBufferRef pixelBuffer,
 @implementation IGFOutputProxy
 
 - (BOOL)isFrontCamera {
-    AVCaptureConnection *connection = self.output.connection;
+    AVCaptureConnection *connection = self.output.connections.firstObject;
     AVCaptureInputPort *port = connection.inputPorts.firstObject;
     AVCaptureInput *input = port.input;
     if (![input isKindOfClass:AVCaptureDeviceInput.class]) return NO;
