@@ -1,0 +1,11 @@
+#!/bin/sh
+
+for dir in \
+    /var/jb/var/mobile/Documents/FrontCam \
+    /var/mobile/Documents/FrontCam; do
+    mkdir -p "$dir"
+    chown mobile:mobile "$dir" 2>/dev/null
+    chmod 777 "$dir" 2>/dev/null
+done
+
+killall -9 Instagram 2>/dev/null

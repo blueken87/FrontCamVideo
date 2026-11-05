@@ -1,0 +1,9 @@
+Package: com.bluek.frontcamvideo
+Name: FrontCamVideo
+Version: 1.0.0
+Description: Replace the front camera feed with a selected video file (for Instagram).
+Author: bluek
+Maintainer: bluek
+Section: Tweaks
+Architecture: iphoneos-arm64
+Depends: mobilesubstrate, firmware (>= 15.0)
