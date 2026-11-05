@@ -56,20 +56,47 @@ static BOOL IGFMirror(void) {
 }
 
 static NSString *IGFVideoPath(void) {
-    NSString *configured = [IGFDefaults() stringForKey:@"Path"];
+    NSFileManager *manager = [NSFileManager defaultManager];
     NSMutableArray *paths = [NSMutableArray array];
+    NSString *configured = [IGFDefaults() stringForKey:@"Path"];
     if (configured.length) [paths addObject:configured];
-    [paths addObjectsFromArray:@[
-        [@"/var/jb/var/mobile/Documents" stringByAppendingPathComponent:@"FrontCam.mp4"],
-        [@"/var/jb/var/mobile/Documents" stringByAppendingPathComponent:@"FrontCam.mov"],
-        [@"/var/mobile/Documents" stringByAppendingPathComponent:@"FrontCam.mp4"],
-        [@"/var/mobile/Documents" stringByAppendingPathComponent:@"FrontCam.mov"],
-        [IGFDocumentsDirectory() stringByAppendingPathComponent:@"FrontCam.mp4"],
-        [IGFDocumentsDirectory() stringByAppendingPathComponent:@"FrontCam.mov"]
-    ]];
-    for (NSString *path in paths) {
-        if ([[NSFileManager defaultManager] fileExistsAtPath:path]) return path;
+
+    NSArray *directories = @[
+        @"/var/jb/var/mobile/Documents",
+        @"/var/mobile/Documents",
+        @"/var/jb/var/mobile/Documents/FrontCam",
+        @"/var/mobile/Documents/FrontCam",
+        IGFDocumentsDirectory(),
+        [IGFDocumentsDirectory() stringByAppendingPathComponent:@"FrontCam"]
+    ];
+    for (NSString *directory in directories) {
+        [paths addObject:[directory stringByAppendingPathComponent:@"FrontCam.mp4"]];
+        [paths addObject:[directory stringByAppendingPathComponent:@"FrontCam.mov"]];
+        NSString *pathFile = [directory stringByAppendingPathComponent:@"path.txt"];
+        NSString *custom = [NSString stringWithContentsOfFile:pathFile encoding:NSUTF8StringEncoding error:nil];
+        custom = [custom stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (custom.length) [paths addObject:custom];
     }
+
+    for (NSString *path in paths) {
+        if ([manager fileExistsAtPath:path]) {
+            IGFLog([NSString stringWithFormat:@"using video %@", path]);
+            return path;
+        }
+    }
+
+    for (NSString *directory in directories) {
+        NSArray *contents = [manager contentsOfDirectoryAtPath:directory error:nil];
+        for (NSString *name in contents) {
+            NSString *extension = name.pathExtension.lowercaseString;
+            if (![extension isEqualToString:@"mp4"] && ![extension isEqualToString:@"mov"]) continue;
+            NSString *path = [directory stringByAppendingPathComponent:name];
+            IGFLog([NSString stringWithFormat:@"using video %@", path]);
+            return path;
+        }
+    }
+
+    IGFLog([NSString stringWithFormat:@"video not found, checked: %@", [paths componentsJoinedByString:@", "]]);
     return nil;
 }
 
