@@ -55,48 +55,44 @@ static BOOL IGFMirror(void) {
     return value ? value.boolValue : YES;
 }
 
+static NSString *IGFFindVideoInDirectory(NSString *directory) {
+    NSFileManager *manager = [NSFileManager defaultManager];
+    NSArray *files = [manager contentsOfDirectoryAtPath:directory error:nil];
+    for (NSString *name in files) {
+        NSString *lower = name.lowercaseString;
+        if ([lower isEqualToString:@"frontcam.mp4"] || [lower isEqualToString:@"frontcam.mov"] ||
+            [lower isEqualToString:@"video.mp4"] || [lower isEqualToString:@"video.mov"]) {
+            return [directory stringByAppendingPathComponent:name];
+        }
+    }
+    return nil;
+}
+
 static NSString *IGFVideoPath(void) {
     NSFileManager *manager = [NSFileManager defaultManager];
-    NSMutableArray *paths = [NSMutableArray array];
     NSString *configured = [IGFDefaults() stringForKey:@"Path"];
-    if (configured.length) [paths addObject:configured];
+    if (configured.length && [manager fileExistsAtPath:configured]) {
+        BOOL isDirectory = NO;
+        if ([manager fileExistsAtPath:configured isDirectory:&isDirectory] && isDirectory) {
+            NSString *found = IGFFindVideoInDirectory(configured);
+            if (found) return found;
+        } else {
+            return configured;
+        }
+    }
 
     NSArray *directories = @[
+        [@"/var/jb/var/mobile/Documents" stringByAppendingPathComponent:kIGFDirName],
         @"/var/jb/var/mobile/Documents",
+        [@"/var/mobile/Documents" stringByAppendingPathComponent:kIGFDirName],
         @"/var/mobile/Documents",
-        @"/var/jb/var/mobile/Documents/FrontCam",
-        @"/var/mobile/Documents/FrontCam",
         IGFDocumentsDirectory(),
-        [IGFDocumentsDirectory() stringByAppendingPathComponent:@"FrontCam"]
+        NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject ?: NSTemporaryDirectory()
     ];
     for (NSString *directory in directories) {
-        [paths addObject:[directory stringByAppendingPathComponent:@"FrontCam.mp4"]];
-        [paths addObject:[directory stringByAppendingPathComponent:@"FrontCam.mov"]];
-        NSString *pathFile = [directory stringByAppendingPathComponent:@"path.txt"];
-        NSString *custom = [NSString stringWithContentsOfFile:pathFile encoding:NSUTF8StringEncoding error:nil];
-        custom = [custom stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-        if (custom.length) [paths addObject:custom];
+        NSString *found = IGFFindVideoInDirectory(directory);
+        if (found) return found;
     }
-
-    for (NSString *path in paths) {
-        if ([manager fileExistsAtPath:path]) {
-            IGFLog([NSString stringWithFormat:@"using video %@", path]);
-            return path;
-        }
-    }
-
-    for (NSString *directory in directories) {
-        NSArray *contents = [manager contentsOfDirectoryAtPath:directory error:nil];
-        for (NSString *name in contents) {
-            NSString *extension = name.pathExtension.lowercaseString;
-            if (![extension isEqualToString:@"mp4"] && ![extension isEqualToString:@"mov"]) continue;
-            NSString *path = [directory stringByAppendingPathComponent:name];
-            IGFLog([NSString stringWithFormat:@"using video %@", path]);
-            return path;
-        }
-    }
-
-    IGFLog([NSString stringWithFormat:@"video not found, checked: %@", [paths componentsJoinedByString:@", "]]);
     return nil;
 }
 

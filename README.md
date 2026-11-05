@@ -5,20 +5,14 @@ Tweak thay camera trước bằng một video có sẵn (Instagram iOS).
 ## Cách dùng
 
 1. Cài tweak.
-2. Copy video vào một trong các đường dẫn:
+2. Copy video vào một trong các đường dẫn (tên file không phân biệt hoa/thường):
 ```text
 /var/jb/var/mobile/Documents/FrontCam.mp4
 /var/jb/var/mobile/Documents/FrontCam.mov
-/var/jb/var/mobile/Documents/FrontCam/FrontCam.mov
-/var/mobile/Documents/FrontCam.mov
+/var/jb/var/mobile/Documents/FrontCam/FrontCam.MOV
+/var/mobile/Documents/FrontCam.mp4
+/var/mobile/Documents/FrontCam/FrontCam.mov
 ```
-
-Hoặc đặt bất kỳ file `.mp4`/`.mov` nào trong:
-```text
-/var/jb/var/mobile/Documents/FrontCam/
-```
-
-Cũng có thể tạo file `path.txt` trong thư mục `FrontCam` chứa đường dẫn tuyệt đối tới video.
 3. Mở Instagram → vào camera/story → chọn camera trước. Video sẽ lặp làm feed camera trước.
 
 Khuyến nghị: video dọc 1080x1920, H.264/HEVC, 30fps, không cần audio.
