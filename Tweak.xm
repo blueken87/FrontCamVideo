@@ -96,6 +96,80 @@ static NSString *IGFVideoPath(void) {
     return nil;
 }
 
+static NSHashTable<AVCaptureVideoPreviewLayer *> *s_previewLayers;
+static char kIGFPreviewPlayerLayerKey;
+static char kIGFPreviewPlayerKey;
+static char kIGFPreviewLooperKey;
+static char kIGFPreviewPathKey;
+
+static BOOL IGFSessionUsesFrontCamera(AVCaptureSession *session) {
+    for (AVCaptureInput *input in session.inputs) {
+        if (![input isKindOfClass:AVCaptureDeviceInput.class]) continue;
+        if (((AVCaptureDeviceInput *)input).device.position == AVCaptureDevicePositionFront) return YES;
+    }
+    return NO;
+}
+
+static void IGFUpdatePreviewLayer(AVCaptureVideoPreviewLayer *layer) {
+    if (!layer) return;
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            IGFUpdatePreviewLayer(layer);
+        });
+        return;
+    }
+
+    AVPlayerLayer *playerLayer = objc_getAssociatedObject(layer, &kIGFPreviewPlayerLayerKey);
+    BOOL front = layer.session && IGFSessionUsesFrontCamera(layer.session);
+    NSString *path = front ? IGFVideoPath() : nil;
+    if (!front || path.length == 0) {
+        playerLayer.hidden = YES;
+        [playerLayer.player pause];
+        return;
+    }
+
+    NSString *currentPath = objc_getAssociatedObject(layer, &kIGFPreviewPathKey);
+    if (playerLayer && ![currentPath isEqualToString:path]) {
+        [playerLayer removeFromSuperlayer];
+        objc_setAssociatedObject(layer, &kIGFPreviewPlayerLayerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(layer, &kIGFPreviewPlayerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(layer, &kIGFPreviewLooperKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(layer, &kIGFPreviewPathKey, nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        playerLayer = nil;
+    }
+
+    if (!playerLayer) {
+        AVPlayerItem *item = [AVPlayerItem playerItemWithURL:[NSURL fileURLWithPath:path]];
+        AVQueuePlayer *player = [AVQueuePlayer queuePlayerWithItems:@[item]];
+        player.muted = YES;
+        AVPlayerLooper *looper = [AVPlayerLooper playerLooperWithPlayer:player templateItem:item];
+        playerLayer = [AVPlayerLayer playerLayerWithPlayer:player];
+        playerLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+        playerLayer.masksToBounds = YES;
+        playerLayer.backgroundColor = UIColor.blackColor.CGColor;
+        playerLayer.zPosition = 1000;
+        playerLayer.transform = IGFMirror() ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity;
+        objc_setAssociatedObject(layer, &kIGFPreviewPlayerLayerKey, playerLayer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(layer, &kIGFPreviewPlayerKey, player, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(layer, &kIGFPreviewLooperKey, looper, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(layer, &kIGFPreviewPathKey, path, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        [layer addSublayer:playerLayer];
+        IGFLog([NSString stringWithFormat:@"preview layer attached: %@", path]);
+    }
+
+    playerLayer.hidden = NO;
+    playerLayer.frame = layer.bounds;
+    if (playerLayer.player.rate == 0) [playerLayer.player play];
+}
+
+static void IGFRefreshPreviewLayers(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        for (AVCaptureVideoPreviewLayer *layer in s_previewLayers.allObjects) {
+            IGFUpdatePreviewLayer(layer);
+        }
+    });
+}
+
 static BOOL IGFSupportedPixelFormat(OSType format) {
     return format == kCVPixelFormatType_32BGRA ||
            format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange ||
@@ -375,7 +449,45 @@ static char kIGFProxyKey;
 
 %end
 
+%hook AVCaptureVideoPreviewLayer
+
+- (void)setSession:(AVCaptureSession *)session {
+    %orig;
+    if (!s_previewLayers) s_previewLayers = [NSHashTable weakObjectsHashTable];
+    @synchronized(s_previewLayers) {
+        [s_previewLayers addObject:self];
+    }
+    IGFUpdatePreviewLayer(self);
+}
+
+- (void)layoutSublayers {
+    %orig;
+    IGFUpdatePreviewLayer(self);
+}
+
+%end
+
+%hook AVCaptureSession
+
+- (void)addInput:(AVCaptureInput *)input {
+    %orig;
+    IGFRefreshPreviewLayers();
+}
+
+- (void)removeInput:(AVCaptureInput *)input {
+    %orig;
+    IGFRefreshPreviewLayers();
+}
+
+- (void)commitConfiguration {
+    %orig;
+    IGFRefreshPreviewLayers();
+}
+
+%end
+
 %ctor {
+    s_previewLayers = [NSHashTable weakObjectsHashTable];
     IGFLog([NSString stringWithFormat:@"loaded bundle=%@ process=%@ video=%@",
             NSBundle.mainBundle.bundleIdentifier ?: @"(nil)",
             NSProcessInfo.processInfo.processName ?: @"(nil)",
